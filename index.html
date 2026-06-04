@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Network Geometry &amp; Transitivity Inspector</title>
+<meta property="og:title" content="Network Geometry & Transitivity Inspector">
+<meta property="og:description" content="Offline NMA pre-flight: from a set of direct comparisons, check whether a network meta-analysis is feasible and describe the network's geometry.">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    --c-ink:#1a1a1a; --c-ink-2:#555a5f; --c-annot:#7a8086; --c-grid:#e7e9ec;
+    --c-axis:#c2c6cb; --c-null:#9aa0a6; --c-estimate:#1a1a1a;
+    --seq-2:#cfe0ec; --cat-1:#0072B2;
+    --t-font-serif:Georgia,'Times New Roman',serif;
+    --t-font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --accent:#2563a8; --bg:#fbfbfa; --card:#ffffff; --line:#e2e4e7; --warn:#9a6a00;
+    --good:#1d7a4d; --bad:#a23a2e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--c-ink);font-family:var(--t-font-sans);line-height:1.5}
+  header{padding:26px 22px 14px;border-bottom:1px solid var(--line);background:var(--card)}
+  h1{margin:0;font-family:var(--t-font-serif);font-size:25px;font-weight:600}
+  .sub{color:var(--c-ink-2);font-size:14px;margin-top:4px;max-width:780px}
+  main{max-width:1080px;margin:0 auto;padding:20px 22px 60px;display:grid;gap:20px;grid-template-columns:1fr;}
+  @media(min-width:880px){main{grid-template-columns:360px 1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .card h2{margin:0 0 12px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--c-ink-2)}
+  label{display:block;font-size:13px;color:var(--c-ink-2);margin:10px 0 3px}
+  textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fff;min-height:170px;resize:vertical;line-height:1.45}
+  .hint{font-size:12px;color:var(--c-annot);margin-top:6px}
+  .verdict{border-radius:8px;padding:12px 14px;font-size:15px;margin-bottom:6px;border:1px solid var(--line)}
+  .verdict.yes{background:#eef7f1;border-color:#cfe7d8;color:var(--good)}
+  .verdict.no{background:#fbeeec;border-color:#f0d4cf;color:var(--bad)}
+  .verdict b{font-weight:700}
+  .reasons{font-size:13px;color:var(--c-ink-2);margin:6px 0 0;padding-left:18px}
+  .reasons li{margin:2px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:4px}
+  th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--c-annot);border-bottom:1.5px solid var(--c-axis)}
+  td.metric{font-weight:600}
+  .muted{color:var(--c-annot)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;font-size:14px;margin-top:4px}
+  .stat{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0}
+  .stat .k{color:var(--c-ink-2)}
+  .stat .v{font-weight:600}
+  ul.check{list-style:none;margin:6px 0 0;padding:0;font-size:13px}
+  ul.check li{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid var(--line)}
+  ul.check input{margin-top:3px}
+  ul.check label{margin:0;color:var(--c-ink);font-size:13px}
+  .warns{margin-top:14px}
+  .warn{background:#fff8ea;border:1px solid #f0e0b8;color:var(--warn);font-size:13px;border-radius:7px;padding:8px 10px;margin-top:7px}
+  svg{width:100%;height:auto;display:block}
+  .figwrap{margin-top:6px}
+  button{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:10px 14px;font-size:14px;cursor:pointer;font-family:inherit;margin-top:14px;width:100%}
+  button.sec{background:#eef2f6;color:var(--c-ink);margin-top:8px}
+  .prov{font-size:12px;color:var(--c-annot);margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+  code{background:#f1f3f5;padding:1px 5px;border-radius:4px;font-size:12px}
+  footer{max-width:1080px;margin:0 auto;padding:0 22px 40px;color:var(--c-annot);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Network Geometry &amp; Transitivity Inspector</h1>
+  <div class="sub">A pre-flight check for network meta-analysis. Enter your direct treatment comparisons; this tool decides whether an NMA is even feasible (one connected network of at least three treatments) and describes the geometry — degree, density, the most-connected node and any multi-arm trials. It estimates nothing: the graph is exact and deterministic. Fully offline — no network, no dependencies.</div>
+</header>
+<main>
+  <section class="card" id="inputs">
+    <h2>Direct comparisons</h2>
+    <label for="data">One comparison per line</label>
+    <textarea id="data" spellcheck="false"></textarea>
+    <div class="hint">
+      Formats:<br>
+      <code>A, B</code> — one 2-arm comparison (weight 1)<br>
+      <code>A, B, 3</code> — 3 studies on the A–B edge<br>
+      <code>T1: A, B, C</code> — a multi-arm trial (all pairwise edges; flagged)<br>
+      Lines beginning <code>#</code> are comments. Names are matched verbatim.
+    </div>
+    <button id="run">Inspect network</button>
+    <button id="ex" class="sec">Load example</button>
+    <div class="prov">
+      <b>Provenance.</b> Connectivity by union–find. <code>nmaFeasible = (components == 1 &amp;&amp; nodes &gt;= 3)</code>;
+      a 2-node network is a pairwise meta-analysis, not an NMA. Density = edges / C(n,2).
+      Multi-arm trials contribute all pairwise edges (correct for geometry, though those edges are
+      statistically correlated). Parallel edges aggregate by summing study counts. The transitivity
+      checklist is qualitative — the tool never asserts transitivity holds.
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Feasibility</h2>
+      <div id="verdict"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h2>Geometry</h2>
+      <div class="grid2" id="stats"></div>
+    </div>
+
+    <div class="card figwrap" style="margin-top:20px">
+      <h2>Evidence network</h2>
+      <svg id="net" aria-label="Evidence network diagram"></svg>
+      <div class="hint" id="figcap"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h2>Transitivity checklist</h2>
+      <div class="hint">These are judgements you must make; the graph cannot decide them. Tick each only if you have checked it for your dataset.</div>
+      <ul class="check" id="checklist"></ul>
+      <div class="warns" id="warns"></div>
+    </div>
+  </section>
+</main>
+<footer>
+  Network Geometry &amp; Transitivity Inspector · single-file, offline · network rendering by the e156 chart-kit ·
+  MIT licensed. A connected feasible network is necessary but not sufficient — transitivity and consistency must still be assessed before interpreting any NMA.
+</footer>
+
+<script src="chartkit.js"></script>
+<script src="engine.js"></script>
+<script>
+(function(){
+  var G = window.NetworkGeometry;
+  var $ = function(id){ return document.getElementById(id); };
+
+  var EXAMPLE =
+    '# Multi-arm + parallel edges; a connected, feasible network\n' +
+    'Placebo, Drug A, 4\n' +
+    'Placebo, Drug B, 3\n' +
+    'Drug A, Drug B\n' +
+    'COMBO-1: Placebo, Drug A, Drug C\n' +
+    'Drug B, Drug C, 2';
+
+  function fmtNum(v){
+    if(v==null || !isFinite(v)) return '—';
+    var a=Math.abs(v);
+    return a>=100 ? v.toFixed(0) : a>=10 ? v.toFixed(1) : v.toFixed(3);
+  }
+
+  function render(){
+    var rep = G.inspect($('data').value);
+
+    // verdict
+    var vd = $('verdict');
+    vd.innerHTML='';
+    var box=document.createElement('div');
+    box.className='verdict ' + (rep.nmaFeasible ? 'yes' : 'no');
+    box.innerHTML = rep.nmaFeasible
+      ? '<b>NMA feasible.</b> One connected network of ' + rep.nNodes + ' treatments.'
+      : '<b>NMA not feasible.</b> See reasons below.';
+    vd.appendChild(box);
+    if(!rep.nmaFeasible && rep.feasibilityReasons.length){
+      var ul=document.createElement('ul'); ul.className='reasons';
+      rep.feasibilityReasons.forEach(function(r){ var li=document.createElement('li'); li.textContent=r; ul.appendChild(li); });
+      vd.appendChild(ul);
+    }
+
+    // geometry stats
+    var rows = [
+      ['Treatments (nodes)', String(rep.nNodes)],
+      ['Direct comparisons (edges)', String(rep.nEdges)],
+      ['Total studies', String(rep.totalStudies)],
+      ['Connected components', String(rep.components)],
+      ['Network density', rep.density==null ? '—' : fmtNum(rep.density)],
+      ['Most-connected node', rep.mostConnected ? rep.mostConnected.id + ' (deg ' + rep.mostConnected.degree + ')' : '—'],
+      ['Multi-arm trials', String(rep.multiArmTrials)]
+    ];
+    var st=$('stats'); st.innerHTML='';
+    rows.forEach(function(r){
+      var d=document.createElement('div'); d.className='stat';
+      var k=document.createElement('span'); k.className='k'; k.textContent=r[0];
+      var v=document.createElement('span'); v.className='v'; v.textContent=r[1];
+      d.appendChild(k); d.appendChild(v); st.appendChild(d);
+    });
+
+    // checklist
+    var cl=$('checklist'); cl.innerHTML='';
+    rep.checklist.forEach(function(c, i){
+      var li=document.createElement('li');
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.id='chk'+i;
+      var lab=document.createElement('label'); lab.setAttribute('for','chk'+i); lab.textContent=c.item;
+      li.appendChild(cb); li.appendChild(lab); cl.appendChild(li);
+    });
+
+    // warnings (multi-arm listing + parse errors)
+    var w=$('warns'); w.innerHTML='';
+    function warn(text){ var d=document.createElement('div'); d.className='warn'; d.textContent=text; w.appendChild(d); }
+    rep.multiArmList.forEach(function(m){
+      warn('Multi-arm trial ' + (m.trialId ? '"'+m.trialId+'" ' : '') + '(line ' + m.line + '): ' + m.arms.join(', ') + ' — its pairwise edges are statistically correlated (shared-comparator covariance τ²/2 in NMA).');
+    });
+    rep.errors.forEach(function(e){
+      warn('Line ' + e.line + ' skipped: ' + e.reason + ' — "' + e.text.trim() + '"');
+    });
+
+    drawNetwork(rep);
+  }
+
+  function drawNetwork(rep){
+    var svg=$('net'), cap=$('figcap');
+    if(!rep.nodes.length){
+      while(svg.firstChild) svg.removeChild(svg.firstChild);
+      cap.textContent='Enter at least one comparison to see the network.';
+      return;
+    }
+    // chart-kit renderNetwork contract: nodes [{id,label,n,isRef}], edges [{a,b,n}]
+    var ref = rep.mostConnected ? rep.mostConnected.id : null;
+    var nodes = rep.nodes.map(function(nd){
+      return { id: nd.id, label: nd.label, n: nd.n, isRef: nd.id === ref };
+    });
+    var edges = rep.edges.map(function(e){ return { a: e.a, b: e.b, n: e.n }; });
+    try {
+      window.ChartKit.renderNetwork(svg, nodes, edges, {
+        claim: 'Evidence network',
+        estimand: rep.nNodes + ' treatments, ' + rep.nEdges + ' direct comparisons, ' + rep.components + ' component' + (rep.components===1?'':'s')
+      });
+      cap.textContent = 'Node radius scales with study count; edge width with number of direct trials. The most-connected node (' + (ref||'—') + ') is outlined as the reference anchor.';
+    } catch(e){
+      cap.textContent='Network preview unavailable: ' + e.message;
+    }
+  }
+
+  $('run').addEventListener('click', render);
+  $('ex').addEventListener('click', function(){ $('data').value=EXAMPLE; render(); });
+
+  $('data').value=EXAMPLE;
+  render();
+})();
+</script>
+</body>
+</html>
