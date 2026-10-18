@@ -1,0 +1,34 @@
+name: NMA geometry parser regression
+
+on:
+  pull_request:
+    paths:
+      - 'engine.js'
+      - 'tests.js'
+      - '.github/workflows/geometry-parser-regressions.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'engine.js'
+      - 'tests.js'
+      - '.github/workflows/geometry-parser-regressions.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  geometry-parser:
+    name: Node geometry regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test graph parsing, connectedness, weighted edges and NMA feasibility
+        run: node tests.js
