@@ -103,5 +103,39 @@ var ws = G.inspect('  Drug A ,  Drug B \nDrug B, Drug C\nDrug A, Drug C');
 eq('whitespace trimmed -> 3 nodes', ws.nNodes, 3);
 ok('label preserved with spaces', ws.nodes.some(function (n) { return n.id === 'Drug A'; }));
 
+
+// --- fail closed: malformed unlabelled count fields must never invent arms --
+[
+  'A, B, 0', 'A, B, -2', 'A, B, 2.5', 'A, B, 1e3',
+  'A, B, Infinity', 'A, B, NaN', 'A, B, 9007199254740992',
+  'A, B, C', 'A, B, X, Y', 'A, B,', 'A, , B'
+].forEach(function (text) {
+  var result = G.inspect(text);
+  eq('invalid input has one error: ' + text, result.errors.length, 1);
+  eq('invalid input creates no arms: ' + text, result.nNodes, 0);
+  ok('invalid input cannot claim NMA feasible: ' + text, !result.nmaFeasible);
+});
+
+// Valid triangle plus malformed input must not claim feasibility for partial data.
+var partial = G.inspect('A, B\nB, C\nC, A\nA, B, 0');
+eq('partial input still contains only valid triangle arms', partial.nNodes, 3);
+eq('partial input reports malformed source line', partial.errors.length, 1);
+ok('partial input fails closed on feasibility', !partial.nmaFeasible);
+ok('partial input includes explanatory reason', partial.feasibilityReasons.some(function (r) {
+  return /invalid input/i.test(r);
+}));
+
+var validCount = G.inspect('A, B, 03\nB, C\nC, A');
+eq('valid leading-zero count preserves study sum', validCount.totalStudies, 5);
+ok('valid counted triangle remains feasible', validCount.nmaFeasible);
+var numericArm = G.inspect('T9: A, B, 0');
+eq('numeric treatment arm allowed with trial ID', numericArm.nNodes, 3);
+ok('labelled numeric multiarm remains feasible', numericArm.nmaFeasible);
+
+var overflow = G.inspect('A, B, 9007199254740991\nB, C, 2');
+eq('aggregate unsafe study count is rejected', overflow.errors.length, 1);
+ok('unsafe aggregate does not return feasible', !overflow.nmaFeasible);
+eq('unsafe aggregate excludes overflowing line', overflow.totalStudies, 9007199254740991);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
